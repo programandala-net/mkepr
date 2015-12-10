@@ -1,0 +1,61 @@
+= mkepr
+:author: Marcos Cruz (programandala.net)
+:revdate: 2015-12-09
+
+// Copyright (C) 2015 Marcos Cruz (programandala.net)
+//
+// You may do whatever you want with this work, so long as you
+// retain the copyright notice(s) and this license in all
+// redistributed copies and derived works. There is no warranty.
+
+== Description
+
+mkepr is a command line tool which creates EPROM image files
+containing files from the host system, ready to be used by the
+Cambridge Z88 emulators
+http://sourceforge.net/projects/zesarux/[ZESarUX]
+and
+https://bitbucket.org/cambridge/ozvm[OZvm].
+
+mkepr 0.0.1 is the first working version, but the program is not
+finished yet: filename checking is very basic, and directories
+are not supported. This is a work in progress.
+
+http://programandala.net/en.program.mkepr.html[mkepr webpage].
+
+== Requirements
+
+mkepr has been written in Forth for
+http://www.gnu.org/software/gforth/[Gforth] Gforth, and needs
+one module from the http://irdvo.github.io/ffl/[Forth Foundation
+Library]. Both of them must be installed on the system.
+
+== Installation
+
+Make sure the <mkepr.fs> is executable. Example:
+
+----
+chmod u+x mkepr.fs
+----
+
+Copy, move or link to a directory on your path. Example:
+
+----
+ln mkepr.fs ~/usr/local/bin/mkepr
+----
+
+== Usage
+
+----
+Usage: mkepr [options] [inputfiles]
+
+  -?, --help        show this help
+      --version     show version info
+  -q, --quiet       quiet mode: input files will not be listed
+  -o, --output=FILE set output file; default: <output.epr>
+  -s, --size=KiB    set the EPROM size in KiB; default: 32
+
+Report bugs to programandala.net
+----
+
+// vim: tw=64
