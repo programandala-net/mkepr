@@ -1,6 +1,6 @@
 = mkepr
 :author: Marcos Cruz (programandala.net)
-:revdate: 2015-12-11
+:revdate: 2015-12-12
 :linkattrs:
 
 // Copyright (C) 2015 Marcos Cruz (programandala.net)
@@ -11,7 +11,7 @@
 
 == Description
 
-mkepr is a command line tool which creates EPROM or Flash image
+mkepr is a command line tool that creates EPROM or Flash image
 files containing files from the host system, ready to be used by
 the Cambridge Z88 emulators
 http://sourceforge.net/projects/zesarux/[ZESarUX, role="external"]
@@ -51,10 +51,11 @@ Usage: mkepr [options] [files]
 
   -?, --help        show this help
       --version     show version info
+  -f, --flash       create an Intel Flash card instead of an EPROM card
+  -o, --output=FILE set output file; default: output.epr (or output.flash)
+  -s, --size=KiB    set the card size; defaults: 32 KiB (EPROM), 512 KiB
+                    (Flash)
   -q, --quiet       quiet mode: input files will not be listed
-  -o, --output=FILE set output file; default: <output.epr>
-  -s, --size=KiB    set the card size in KiB; default: 32
-  -f, --flash       create a Flash card instead of an EPROM card
 
 Report bugs via programandala.net
 ----
