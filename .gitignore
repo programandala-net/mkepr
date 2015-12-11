@@ -1,3 +1,6 @@
 
-_doc
 *.epr
+_doc
+_pack.sh
+_tests
+mkepr.zip
