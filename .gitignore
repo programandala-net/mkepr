@@ -1,6 +1,5 @@
-
-*.epr
 _doc
+_meta
 _pack.sh
 _tests
 mkepr.zip

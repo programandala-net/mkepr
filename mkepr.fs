@@ -2,7 +2,7 @@
 
 \ mkepr.fs
 
-s" 0.3.1-20151211" 2constant version
+s" 0.3.2-20151215" 2constant version
 
 \ ==============================================================
 \ Description
@@ -280,16 +280,30 @@ eprom-card-default-size value default-card-size
   store-card-subtype  store-card-oz-id  ;
   \ Init the card header, located at the end of the card.
 
-: init-flash-card-header  ( -- )
+: null-file  ( -- )
   1 byte>card 0 byte>card 0 byte>card
   0 byte>card 0 byte>card 0 byte>card  ;
-  \ Init the second header, specific to Flash cards, located at
-  \ the start of the card; it consists of one one and five
-  \ zeroes.
+  \ Create a "null" file, a file entry with a null filename
+  \ and zero length.
+  \
+  \ Thanks to Garry Lancaster for the confirmation what those
+  \ bytes really are
+  \ (https://www.mail-archive.com/forth-sinclair@yahoogroups.com/msg00038.html):
+  \ ____
+  \ Due to a strange side effect with Intel Flash Chips, a
+  \ special "NULL" file is saved as the first file to the Card.
+  \ These bytes occupies the first bytes that otherwise could be
+  \ interpreted as a random boot command for the Intel chip -
+  \ the behaviour is an Intel chip suddenly gone into command
+  \ mode for no particular reason. The NULL file prevents this
+  \ behaviour by saving a file that avoids any kind of boot
+  \ commands which sends the chip into command mode when the
+  \ card has been inserted into a Z88 slot.
+  \ ____
 
 : format-card  ( -- )
   erase-card init-card-header
-  flash-card? if  init-flash-card-header  then  ;
+  flash-card? if  null-file  then  ;
 
 : create-card  ( -- )
   allocate-card  dup to card  >card !
@@ -631,5 +645,9 @@ run bye
 \ - Fixed the default size of Flash cards.
 \ - Removed the check of maximum file length.
 \ - Improved the help.
+\
+\ 2015-12-15: Version 0.3.2. Added the explanation about the
+\ "null" file required by Intel Flash cards and renamed one word
+\ accordingly.
 
 \ vim: tw=64
