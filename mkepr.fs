@@ -2,7 +2,7 @@
 
 \ mkepr.fs
 
-s" 0.3.2-20151215" 2constant version
+s" 0.4.0-20151216" 2constant version
 
 \ ==============================================================
 \ Description
@@ -35,22 +35,23 @@ s" 0.3.2-20151215" 2constant version
 \
 \ https://cambridgez88.jira.com/wiki/display/DN/Miscellaneous+useful+information#Miscellaneoususefulinformation-FileCardformat
 
-\ The testings were done on the ZEsarUX emulator (snapshot
-\ version 3.2-SN):
+\ The testings were done on the following Z88 emulators:
 \
+\ ZEsarUX (snapshot version 3.2-SN), by César Hernández:
 \ http://sourceforge.net/projects/zesarux/
+\
+\ OZvm (version 1.1.5), by Gunter Strube:
+\ https://cambridgez88.jira.com/wiki/display/OZVM
+
+\ Thanks to Garry Lancaster for confirming the format of
+\ Intel Flash cards:
+\
+\ https://www.mail-archive.com/forth-sinclair@yahoogroups.com/msg00038.html
 
 \ ==============================================================
 \ History
 
 \ See at the end of the file.
-
-\ ==============================================================
-\ To-do
-
-\ - Directories.
-\ - Confirm the range of sizes of every card type.
-\ - Consult the differences between AMD Flash and EPROM.
 
 \ ==============================================================
 \ Installation
@@ -65,6 +66,9 @@ s" 0.3.2-20151215" 2constant version
 
 \ ==============================================================
 \ Documentation on the File Card format
+
+\ From
+\ https://cambridgez88.jira.com/wiki/display/DN/Miscellaneous+useful+information#Miscellaneoususefulinformation-FileCardformat
 
 \ $0000       File entry
 \ ...         File entry
@@ -86,10 +90,26 @@ s" 0.3.2-20151215" 2constant version
 \ 1 byte      n           length of filename
 \ 1 byte      x           '/' for latest version
 \                         $00 for old version (deleted)
-\ n-1 bytes   'xxxx'      filename
+\ n-1 bytes   '...'       filename
 \ 4 bytes     m           length of file
 \                         (least significant byte first)
 \ m bytes                 body of file
+
+
+\ From the source of FlashStore
+\ (https://cambridgez88.jira.com/wiki/display/ZFS/FlashStore+%28Z88+popdown%29+Home):
+\
+\ ____
+\ Due to a strange side effect with Intel Flash Chips, a
+\ special "NULL" file is saved as the first file to the Card.
+\ These bytes occupies the first bytes that otherwise could be
+\ interpreted as a random boot command for the Intel chip -
+\ the behaviour is an Intel chip suddenly gone into command
+\ mode for no particular reason. The NULL file prevents this
+\ behaviour by saving a file that avoids any kind of boot
+\ commands which sends the chip into command mode when the
+\ card has been inserted into a Z88 slot.
+\ ____
 
 \ ==============================================================
 \ Requirements
@@ -137,6 +157,47 @@ variable (any?)
 : any?  ( x0 x1..xn n -- f )
   dup 1+ roll (any?) !  0 swap 0 do  swap (any?) @ = or  loop  ;
   \ Is any _x1..xn_ equal to _x0_?
+
+: sides  { ca1' len1' ca1 len1 len2 -- ca3 len3 ca4 len4 }
+  ca1  len1 len1' -             \ left side
+  ca1' len2 +  len1' len2 -  ;  \ right side
+  \ Convert the result returned by 'search': divide the searched
+  \ string at the substring that was searched to.
+  \ ca1' len1' = string searched, starting with the first (ca2 len2)
+  \ ca1 len1 = original string, before the search
+  \ len2 = length of the substring searched for
+  \ ca1' len2 = substring found in ca1 len1
+  \ ca3 len3 = left side of ca1 len1, until and excluding ca1' len2
+  \ ca4 len4 = right side of ca1 len1, after ca1' len2
+
+: /sides  { ca1 len1 ca2 len2 -- ca1 len1' ca3 len3 f }
+  ca1 len1 ca2 len2 search dup >r
+  if    ca1 len1 len2 sides
+  else  over 0  \ fake right side
+  then  r>  ;
+  \ Search a string _ca1 len1_
+  \ for the first occurence of a substring _ca2 len2_.
+  \ Divide the string _ca1 len1_ in two parts: return both sides
+  \ of the substring _ca2 len2_ (first occurence), excluding the
+  \ substring _ca2 len2_ itself.
+  \
+  \ ca1 len1  = string
+  \ ca2 len2  = substring
+  \ ca1 len1' = left side (or whole string if not found)
+  \ ca3 len3  = right side (or empty string if not found)
+  \ f = found?
+  \
+  \ Note: _ca3 len3_ can be empty also when _f_ is true.
+
+: /slash  ( ca len -- ca#1 len#1 ... ca#n len#n n )
+  depth >r
+  begin  s" /" /sides 0=  until  2drop
+  depth r> 2 - - 2/  ;
+  \ Divide a slash separated values string.
+
+: -prefix  ( ca1 len1 ca2 len2 -- ca1' len1' )
+  dup >r 2over 2swap string-prefix? r> and /string  ;
+  \ Remove a prefix _ca2 len2_ from a string _ca1 len1_.
 
 \ ==============================================================
 \ Card
@@ -285,21 +346,6 @@ eprom-card-default-size value default-card-size
   0 byte>card 0 byte>card 0 byte>card  ;
   \ Create a "null" file, a file entry with a null filename
   \ and zero length.
-  \
-  \ Thanks to Garry Lancaster for the confirmation what those
-  \ bytes really are
-  \ (https://www.mail-archive.com/forth-sinclair@yahoogroups.com/msg00038.html):
-  \ ____
-  \ Due to a strange side effect with Intel Flash Chips, a
-  \ special "NULL" file is saved as the first file to the Card.
-  \ These bytes occupies the first bytes that otherwise could be
-  \ interpreted as a random boot command for the Intel chip -
-  \ the behaviour is an Intel chip suddenly gone into command
-  \ mode for no particular reason. The NULL file prevents this
-  \ behaviour by saving a file that avoids any kind of boot
-  \ commands which sends the chip into command mode when the
-  \ card has been inserted into a Z88 slot.
-  \ ____
 
 : format-card  ( -- )
   erase-card init-card-header
@@ -332,29 +378,14 @@ eprom-card-default-size value default-card-size
   \ Error if the card size _n_ (in KiB) is not a multiple of 16.
 
 : eprom-card-sizes  ( -- x0..xn n )
-  32 128 256  3  ;
-  \ Return the proper sizes (in Kib) for an EPROM card, and
-  \ their count.
-  \ XXX TODO -- confirm the sizes
+  32 128 256 3  ;
+  \ Return the proper sizes (in Kib) for an EPROM card,
+  \ and their count.
 
 : flash-card-sizes  ( -- x0..xn n )
   512 1024  2  ;
-  \ Return the proper sizes (in Kib) for a Flash card, and
-  \ their count.
-  \ XXX TODO -- confirm the sizes
-
-  \ XXX TMP -- Notes:
-  \
-  \ Cards created by ZEsarUX:
-  \   EPROM: 32, 128, 256 (eprom format)
-  \   Flash Int: 512, 1024 (flash format: starting header)
-  \
-  \ Cards created by OZvm:
-  \   EPROM: 32, 128, 256 (eprom format)
-  \   AMD Flash: 128, 512, 1024 (eprom format)
-  \   Intel Flash: 1024 (flash format: starting header)
-  \
-  \ XXX TODO -- consult about AMD Flash
+  \ Return the proper sizes (in Kib) for a Intel Flash card,
+  \ and their count.
 
 : ?card-size-range  ( n -- )
   flash-card? if    flash-card-sizes
@@ -362,7 +393,6 @@ eprom-card-default-size value default-card-size
   any? 0= abort" Wrong size for the card type."  ;
   \ Error if the card size _n_ (in KiB) is not in the range
   \ allowed by the card type.
-  \ XXX TODO -- confirm this condition
 
 : check-card-size  ( d ca len -- n )
   ?card-size-number d>s dup ?card-size-pages  dup ?card-size-range  ;
@@ -427,18 +457,18 @@ variable files  \ counter
       r> chr-ascii? and  ;
   \ Is _c_ a valid filename char?
 
-: ?filename-chars  ( ca len -- )
+: ?segment-chars  ( ca len -- )
   bounds ?do
     i c@  valid-char? 0=
     if  cr ." Invalid char '" i c@ emit ." '" abort  then
   loop  ;
   \ Error if not all filename chars are valid.
 
-: ?filename-length  ( ca len -- )
-  nip /filename > abort" Filename too long."  ;
+: ?segment-length  ( ca len -- )
+  nip /filename > abort" Segment too long."  ;
   \ Error if filename length is too long.
 
-: ?filename-dot  ( ca len -- +n | -1 )
+: ?segment-dot  ( ca len -- +n | -1 )
   -1 -rot  over swap  ( -1 ca ca len )
   bounds ?do
     i c@ '.' =
@@ -449,35 +479,41 @@ variable files  \ counter
   \ Return the position _+n_ of the dot (0..len-1), or -1 if
   \ there's no dot.
 
-: ?filename-extension  ( len n )
-  - 1- dup 3 > abort" Filename extension is too long."
-            0= abort" Filename extension is empty."  ;
+: ?segment-extension  ( len n )
+  - 1- dup 3 > abort" Segment extension is too long."
+            0= abort" Segment extension is empty."  ;
   \ Error if the filename extension is too long or empty; _len_
   \ is the length of the filename and _n_ is the position of the
   \ dot (0...len-1).
 
-: ?filename-without-extension  ( len n -- )
-  nip dup 12 > abort" Filename without extension is too long."
-            0= abort" Filename without extension is empty."  ;
+: ?segment-without-extension  ( len n -- )
+  nip dup 12 > abort" Segment without extension is too long."
+            0= abort" Segment without extension is empty."  ;
   \ Error if the filename without the extension is too long or
   \ empty.  _len_ is the length of the filename and _n_ is the
   \ position of the dot (0...len-1).
 
-: ?filename-format  ( ca len n -- )
+: ?segment-format  ( ca len n -- )
   rot drop  dup -1 = if  2drop exit  then  \ exit if no extension
-  ( len n ) 2dup ?filename-extension
-  ?filename-without-extension  ;
+  ( len n ) 2dup ?segment-extension
+  ?segment-without-extension  ;
   \ Error if the filename format is not "12.3".
   \ The filename length is supposed to be under 17.
   \ _n_ is the position of the dot (0...len-1); or -1
   \ if there's no dot.
 
+: ?segment  ( ca len -- )
+  2dup ?segment-length
+  2dup ?segment-chars
+  2dup ?segment-dot
+       ?segment-format  ;
+  \ Error if the segment _ca len_ is invalid.
+  \ A segment is each part of a explicit filename divided
+  \ by slashes.
+
 : ?filename  ( ca len -- )
-  2dup ?filename-length
-  2dup ?filename-chars
-  2dup ?filename-dot
-       ?filename-format  ;
-  \ Error if the filename is invalid.
+  /slash 0 ?do  ?segment  loop  ;
+  \ Error if the filename _ca len_ is invalid.
 
 : check-file  ( ca len -- )
   ?filename ?space-left  ;
@@ -516,9 +552,13 @@ true value verbose?
   \ Print the string _ca len_, if verbose mode is on,
   \ else discard it.
 
+: adjust-path  ( ca len -- ca' len' )
+  s" ./" -prefix  ;
+  \ Remove the "./" prefix from filename _ca len_, if present.
+
 : file>card  ( ca len -- )
   1 files +!  card-needed
-  2dup filename 2!  2dup get-file  2dup echo
+  adjust-path  2dup filename 2!  2dup get-file  2dup echo
   check-file current-file>card free-file  ;
   \ Copy file _ca len_ to the card, if possible.
 
@@ -618,11 +658,14 @@ mkepr-arguments arg-add-option
 \ ==============================================================
 \ Boot
 
-: run  ( -- )
+' noop is dobacktrace
+  \ Don't show the return stack backtrace after an error.
+
+: mkepr  ( -- )
   files off  parse-options
   files @ if  save-card  else  show-help  then  ;
 
-run bye
+mkepr bye
 
 \ ==============================================================
 \ History
@@ -649,5 +692,8 @@ run bye
 \ 2015-12-15: Version 0.3.2. Added the explanation about the
 \ "null" file required by Intel Flash cards and renamed one word
 \ accordingly.
+\
+\ 2015-12-16: Version 0.4.0. Added support for directories.
+\ No backtrace shown on errors.
 
 \ vim: tw=64

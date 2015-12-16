@@ -1,6 +1,6 @@
 = mkepr
 :author: Marcos Cruz (programandala.net)
-:revdate: 2015-12-12
+:revdate: 2015-12-16
 :linkattrs:
 
 // Copyright (C) 2015 Marcos Cruz (programandala.net)
@@ -46,6 +46,8 @@ ln mkepr.fs ~/usr/local/bin/mkepr
 
 == Usage
 
+=== Syntax and options
+
 ----
 Usage: mkepr [options] [files]
 
@@ -56,8 +58,44 @@ Usage: mkepr [options] [files]
   -s, --size=KiB    set the card size; defaults: 32 KiB (EPROM), 512 KiB
                     (Flash)
   -q, --quiet       quiet mode: input files will not be listed
-
-Report bugs via programandala.net
 ----
+
+=== Usage examples
+
+Note: mkepr must receive a literal list of filenames (including
+their paths).  Sometimes a shell regular expression is enough,
+but sometimes `find` must be used.
+
+Create a default EPROM card containing all text files from the
+current directory:
+
+----
+mkepr *.txt
+----
+
+Create a 128-KiB EPROM card containing all text files from the
+current directory and all Forth sources from the _forth_
+subdirectory (which will be preserved in the card):
+
+----
+mkepr --size=128 --output=forth.epr *.txt forth/*.fs
+----
+
+Create a 512-KiB Flash card containing all files of the current
+directory and all subdirectories (the:
+
+----
+mkepr -f -s 512 -o /tmp/eprom.flash $(find  -name "*" -type f)
+----
+
+== Known issues
+
+Filenames are checked according to the rules of the OZ file
+system, and the program halts if any of their segments (sections
+between slashes) is invalid. No attempt is made to adapt invalid
+filenames, except removing the "./" prefix when present, right
+before the actual checks. This means the input files must be on
+the current directory. For example, the following command will
+not work: `mkepr ../file.txt`.
 
 // vim: tw=64
