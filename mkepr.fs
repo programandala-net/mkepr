@@ -2,17 +2,21 @@
 
 \ mkepr.fs
 
-s" 0.4.0-20151216" 2constant version
+: version  s" 0.4.1+20151217"  ;  \ after http://semver.org
 
 \ ==============================================================
 \ Description
 
-\ mkepr is a command line tool that creates EPROM image files
-\ containing files from the host system, ready to be used by the
-\ Cambridge Z88 emulators ZEsarUX and OZvm.
+\ mkepr is a command line tool that creates EPROM and Intel
+\ Flash image files containing files from the host system, ready
+\ to be used by the Cambridge Z88 emulators ZEsarUX and OZvm.
 
 \ mkepr webpage:
 \ http://programandala.net/en.program.mkepr.html
+
+\ mkepr is written in Forth for Gforth (tested on version
+\ 0.7.3):
+\ http://gnu.org/software/gforth
 
 \ ==============================================================
 \ Author and license
@@ -26,15 +30,6 @@ s" 0.4.0-20151216" 2constant version
 \ ==============================================================
 \ Acknowledgments
 
-\ mkepr is written in Forth for Gforth:
-\
-\ http://gnu.org/software/gforth
-
-\ The information on the File Card format was retrieved from
-\ the website of the Z88 Development Team:
-\
-\ https://cambridgez88.jira.com/wiki/display/DN/Miscellaneous+useful+information#Miscellaneoususefulinformation-FileCardformat
-
 \ The testings were done on the following Z88 emulators:
 \
 \ ZEsarUX (snapshot version 3.2-SN), by César Hernández:
@@ -43,10 +38,22 @@ s" 0.4.0-20151216" 2constant version
 \ OZvm (version 1.1.5), by Gunter Strube:
 \ https://cambridgez88.jira.com/wiki/display/OZVM
 
+\ Thanks to César Hernández for the location of the information
+\ about the File Card format, on the website of the Z88
+\ Development Team.
+\
+\ https://cambridgez88.jira.com/wiki/display/DN/Miscellaneous+useful+information#Miscellaneoususefulinformation-FileCardformat
+
 \ Thanks to Garry Lancaster for confirming the format of
 \ Intel Flash cards:
 \
 \ https://www.mail-archive.com/forth-sinclair@yahoogroups.com/msg00038.html
+
+\ Thanks to Anton Erlt for the example how to do `bye` returning an
+\ error code to the OS shell:
+\
+\ http://lists.gnu.org/archive/html/gforth/2015-12/msg00004.html
+\ http://www.mail-archive.com/gforth@gnu.org/msg00540.html
 
 \ ==============================================================
 \ History
@@ -56,13 +63,18 @@ s" 0.4.0-20151216" 2constant version
 \ ==============================================================
 \ Installation
 
-\ Make sure the <mkepr.fs> is executable. Example:
+\ Make sure the <mkepr.fs> is executable.  Then copy, move or
+\ link it to a directory on your path.
+
+\ Example for single-user installation:
 
 \     chmod u+x mkepr.fs
+\     ln mkepr.fs ~/bin/mkepr
 
-\ Copy, move or link it to a directory on your path. Example:
+\ Example for system-wide installation:
 
-\     ln mkepr.fs ~/usr/local/bin/mkepr
+\     chmod ugo+x mkepr.fs
+\     ln mkepr.fs /usr/local/bin/mkepr
 
 \ ==============================================================
 \ Documentation on the File Card format
@@ -152,6 +164,10 @@ require ffl/chr.fs  \ char data type
   s>d d>str  ;
   \ Convert number _n_ to a string _ca len_.
 
+: c>str  ( c -- ca len )
+  1 allocate throw  tuck c! 1  ;
+  \ Convert an ASCII char to a string.
+
 variable (any?)
 
 : any?  ( x0 x1..xn n -- f )
@@ -198,6 +214,13 @@ variable (any?)
 : -prefix  ( ca1 len1 ca2 len2 -- ca1' len1' )
   dup >r 2over 2swap string-prefix? r> and /string  ;
   \ Remove a prefix _ca2 len2_ from a string _ca1 len1_.
+
+: typecr ( ca len -- )  type cr  ;
+
+: ?error-bye ( f ca len -- )
+  rot if
+    ['] typecr stderr outfile-execute 1 (bye)
+  then  2drop  ;
 
 \ ==============================================================
 \ Card
@@ -368,13 +391,13 @@ eprom-card-default-size value default-card-size
   \ Save the card to a file.
 
 : ?card-size-number  ( ca len -- )
-  nip 0<> abort" Wrong size: not a valid number."  ;
+  nip 0<> s" Wrong size: not a valid number." ?error-bye  ;
   \ Error if the card size number is wrong.
   \ _ca len_ is the string left by `>number`, and its
   \ length must be zero if the conversion was successful.
 
 : ?card-size-pages  ( n -- )
-  16 mod abort" Wrong size: it must be a multiple of 16"  ;
+  16 mod s" Wrong size: it must be a multiple of 16" ?error-bye  ;
   \ Error if the card size _n_ (in KiB) is not a multiple of 16.
 
 : eprom-card-sizes  ( -- x0..xn n )
@@ -390,7 +413,7 @@ eprom-card-default-size value default-card-size
 : ?card-size-range  ( n -- )
   flash-card? if    flash-card-sizes
               else  eprom-card-sizes  then
-  any? 0= abort" Wrong size for the card type."  ;
+  any? 0= s" Wrong size for the card type." ?error-bye  ;
   \ Error if the card size _n_ (in KiB) is not in the range
   \ allowed by the card type.
 
@@ -401,7 +424,7 @@ eprom-card-default-size value default-card-size
   \ If no error is found, return the size _n_ (in KiB).
 
 : ?no-card-yet  ( -- )
-  card abort" Invalid option: the card is already created."  ;
+  card s" Invalid option: the card is already created." ?error-bye  ;
   \ Error if the card is already created.
 
 : set-card-size  ( ca len -- )
@@ -447,7 +470,7 @@ variable files  \ counter
   \ Is the card full?
 
 : ?space-left  ( -- )
-  full-card? abort" No space left in the card."  ;
+  full-card? s" No space left in the card." ?error-bye  ;
   \ Error if there's no space left in the card.
 
 : valid-char?  ( c -- )
@@ -457,22 +480,24 @@ variable files  \ counter
       r> chr-ascii? and  ;
   \ Is _c_ a valid filename char?
 
+: ?valid-char  ( c -- )
+  dup >r valid-char? 0=
+  s" Invalid filename character '" r> c>str s+ s" '." s+ ?error-bye  ;
+  \ Error if _c_ is not a valid char.
+
 : ?segment-chars  ( ca len -- )
-  bounds ?do
-    i c@  valid-char? 0=
-    if  cr ." Invalid char '" i c@ emit ." '" abort  then
-  loop  ;
-  \ Error if not all filename chars are valid.
+  bounds ?do  i c@ ?valid-char  loop  ;
+  \ Error if any filename char in invalid.
 
 : ?segment-length  ( ca len -- )
-  nip /filename > abort" Segment too long."  ;
+  nip /filename > s" Segment too long." ?error-bye  ;
   \ Error if filename length is too long.
 
 : ?segment-dot  ( ca len -- +n | -1 )
   -1 -rot  over swap  ( -1 ca ca len )
   bounds ?do
     i c@ '.' =
-    if  over -1 > abort" More than one dot in the filename."
+    if  over -1 > s" More than one dot in the filename." ?error-bye
         nip i swap - dup  ( +n +n )  then
   loop  drop  ;
   \ Error if filename contains two or more dots.
@@ -480,15 +505,15 @@ variable files  \ counter
   \ there's no dot.
 
 : ?segment-extension  ( len n )
-  - 1- dup 3 > abort" Segment extension is too long."
-            0= abort" Segment extension is empty."  ;
+  - 1- dup 3 > s" Segment extension is too long." ?error-bye
+            0= s" Segment extension is empty." ?error-bye  ;
   \ Error if the filename extension is too long or empty; _len_
   \ is the length of the filename and _n_ is the position of the
   \ dot (0...len-1).
 
 : ?segment-without-extension  ( len n -- )
-  nip dup 12 > abort" Segment without extension is too long."
-            0= abort" Segment without extension is empty."  ;
+  nip dup 12 > s" Segment without extension is too long." ?error-bye
+            0= s" Segment without extension is empty." ?error-bye  ;
   \ Error if the filename without the extension is too long or
   \ empty.  _len_ is the length of the filename and _n_ is the
   \ position of the dot (0...len-1).
@@ -556,9 +581,15 @@ true value verbose?
   s" ./" -prefix  ;
   \ Remove the "./" prefix from filename _ca len_, if present.
 
+: ?file-exists  ( ca len -- )
+  2dup file-status s" No such file: " 2rot s+ ?error-bye drop  ;
+  \ Error if file _ca len_ does not exist.
+
 : file>card  ( ca len -- )
+  2dup ?file-exists
   1 files +!  card-needed
-  adjust-path  2dup filename 2!  2dup get-file  2dup echo
+  adjust-path  2dup filename 2!
+  2dup get-file  2dup echo
   check-file current-file>card free-file  ;
   \ Copy file _ca len_ to the card, if possible.
 
@@ -681,19 +712,22 @@ mkepr bye
 \
 \ 2015-12-11: Version 0.2.0. Filenames are checked.
 \
-\ 2015-12-11: Version 0.3.1.
-\ - Added card size check depending on the card type.
-\ - Fixed the format of file length (only files
-\   larger than 16 MiB were affected).
-\ - Fixed the default size of Flash cards.
-\ - Removed the check of maximum file length.
-\ - Improved the help.
+\ 2015-12-11: Version 0.3.1.  - Added card size check depending
+\ on the card type.  - Fixed the format of file length (only
+\ files larger than 16 MiB were affected).  - Fixed the default
+\ size of Flash cards.  - Removed the check of maximum file
+\ length.  - Improved the help.
 \
 \ 2015-12-15: Version 0.3.2. Added the explanation about the
 \ "null" file required by Intel Flash cards and renamed one word
 \ accordingly.
 \
-\ 2015-12-16: Version 0.4.0. Added support for directories.
-\ No backtrace shown on errors.
+\ 2015-12-16: Version 0.4.0. Added support for directories.  No
+\ backtrace shown on errors.
+\
+\ 2015-12-17: Version 0.4.1. No internal information shown on
+\ errors. Missing files are detected, right at the start.
+\ Improved error on invalid characters. Fixed and improved
+\ installation instructions.
 
 \ vim: tw=64
