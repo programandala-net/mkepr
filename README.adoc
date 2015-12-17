@@ -1,6 +1,6 @@
 = mkepr
 :author: Marcos Cruz (programandala.net)
-:revdate: 2015-12-16
+:revdate: 2015-12-17
 :linkattrs:
 
 // Copyright (C) 2015 Marcos Cruz (programandala.net)
@@ -32,16 +32,21 @@ system.
 
 == Installation
 
-Make sure <mkepr.fs> is executable. Example:
+Make sure the <mkepr.fs> is executable.  Then copy, move or
+link it to a directory on your path.
+
+Example for single-user installation:
 
 ----
 chmod u+x mkepr.fs
+ln mkepr.fs ~/bin/mkepr
 ----
 
-Copy, move or link it to a directory on your path. Example:
+Example for system-wide installation:
 
 ----
-ln mkepr.fs ~/usr/local/bin/mkepr
+chmod ugo+x mkepr.fs
+ln mkepr.fs /usr/local/bin/mkepr
 ----
 
 == Usage
